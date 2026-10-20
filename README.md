@@ -14,41 +14,55 @@
 
 **Current stage:** proposal and design (milestone `pre-defense-1`, 24 Oct 2026).
 
-Requirements, literature review, technology comparison and system diagrams are in progress. Implementation of the mobile app and backend has not started yet.
+Requirements, literature review, existing systems comparison, verification plan and system diagrams are in progress. Implementation of the mobile app and backend has not started yet.
 
 ---
 
 ## About the project
 
-Diabetes AI Assistant is a mobile application for people with **type 1 diabetes**, their parents and their doctors. The patient records glucose readings, the system analyses trends, identifies risky situations and sends alerts to the patient and, with consent, to a parent or doctor.
+Diabetes AI Assistant is a mobile application for people with **type 1 diabetes**, their parents and their doctors. The patient enters glucose meter readings, food, insulin, activity and symptoms. The app shows trends, warns about risky situations and sends critical alerts to the patient and, with consent, to a parent. A doctor sees charts and a weekly summary only through an invite code from the patient.
 
 ### Development stages
 
 | Stage | Data source | Risk assessment |
 |---|---|---|
-| **1. MVP** | Manual glucose readings entered by the patient | Rule-based thresholds and trend analysis |
-| **2. If time allows** | Integration with continuous glucose monitoring (CGM) | Machine learning prediction of hypoglycemia |
-
-**Why manual readings first.** A glucose meter gives 4–7 readings per day. This is enough for logging, trends and threshold alerts, but too sparse for reliable short-term prediction. CGM gives a reading every 5 minutes, which makes ML prediction feasible. So the MVP uses rule-based logic, and the ML model is developed on CGM research data in parallel.
+| **1. MVP** | Manual glucose meter readings (4–7 per day) | Threshold alerts + ML prediction of nocturnal hypoglycemia from sparse readings |
+| **2. If time allows** | Integration with continuous glucose monitoring (CGM) | The same model on dense CGM data |
 
 ### MVP features
 
 - Registration and roles: patient, parent, doctor, administrator
-- Manual entry of glucose readings
-- History and trends: average glucose, time in range, change between readings
-- Rule-based alerts with three levels of response:
+- Manual entry of glucose readings, food, insulin, activity and symptoms
+- Charts and patterns: share of readings in range, averages by time of day, repeated lows or highs
+- Alerts with three levels of response:
   - **Information** — e.g. weekly average glucose
   - **Recommendation** — e.g. "glucose is low, re-check in 15 minutes"
-  - **Medical attention** — e.g. "critically low glucose, contact your doctor or emergency services"
-- Parent and doctor access, granted and revoked by the patient
-- Web panel for doctors
-- AI assistant for general questions, with safety restrictions
+  - **Needs attention now** — e.g. "critically low glucose, follow your hypo plan and contact your doctor or emergency services"
+- Night-time hypoglycemia risk at bedtime, with an explanation of the main factors
+- Parent access and doctor access by invite code, revocable at any time, with an audit log
+- Doctor web panel with a weekly summary
+- AI coach for general questions, with safety restrictions
 
 ### Future work
 
 - CGM integration
-- ML-based hypoglycemia prediction inside the app
 - Food recognition from photos
+
+---
+
+## Technology stack
+
+| Part | Technologies |
+|---|---|
+| Mobile app | Flutter (Android, iOS) |
+| Backend | Python, REST API |
+| Database | PostgreSQL |
+| Push notifications | Firebase Cloud Messaging (FCM) + local notifications on the device |
+| AI / ML | Python, scikit-learn, XGBoost / LightGBM, SHAP |
+| AI coach | LLM with system prompt, input/output filters and answers grounded in guideline documents |
+| Testing | pytest, flutter_test, Locust or k6 |
+| Infrastructure | Docker, GitHub Actions (CI, secret scanning) |
+| Project management | YouTrack (project `DIP`), GitHub |
 
 ---
 
@@ -62,42 +76,38 @@ Diabetes AI Assistant is a mobile application for people with **type 1 diabetes*
          │        REST API         │
          └───────────┬─────────────┘
               ┌──────▼──────┐
-              │   Backend   │───────► Notification service
+              │   Backend   │───────► Notification service (FCM)
+              │  (Python)   │
               └──┬───────┬──┘
                  │       │
-          ┌──────▼──┐ ┌──▼─────────┐
-          │Database │ │ AI module  │
-          └─────────┘ └────────────┘
+        ┌────────▼──┐ ┌──▼─────────┐
+        │PostgreSQL │ │ AI module  │
+        └───────────┘ └────────────┘
 ```
 
-The backend technology will be selected based on the technology comparison (DIP-12).
-
-Diagrams are stored in [`diagrams/`](diagrams):
-
-- System Context Diagram
-- Component Diagram
-- Use Case Diagram
-- ERD, Activity and Sequence diagrams (in progress)
+Diagrams are stored in [`diagrams/`](diagrams).
 
 ---
 
 ## AI methodology (research component)
 
+**Research question:** can a gradient-boosting model that uses only sparse self-monitoring data (4–7 meter readings per day, carbohydrates, insulin, activity) predict nocturnal hypoglycemia better than a simple rule, without more false alarms? How much accuracy is lost compared with dense CGM data?
+
 | | |
 |---|---|
-| **Task** | Prediction of hypoglycemia (< 3.9 mmol/L) 30–60 minutes ahead |
-| **Dataset** | CITY (CGM Intervention in Teens and Young Adults with T1D), JAEB Center for Health Research |
-| **Input features** | Recent glucose values, rate and direction of change, time of day, insulin and carbohydrates where available |
-| **Models** | Rule-based baseline → Logistic Regression → XGBoost / LightGBM |
-| **Explainability** | SHAP values: which factors contributed to each prediction |
-| **Data split** | By patient (no patient appears in both train and test) |
-| **Metrics** | Precision, recall, F1, false alarms per day, missed events, prediction lead time |
+| **Task** | At bedtime, predict nocturnal hypoglycemia (< 3.9 mmol/L for ≥ 15 min) in the next 8 hours |
+| **Dataset** | CITY (CGM Intervention in Teens and Young Adults with T1D), Jaeb Center for Health Research: 153 participants aged 14–24 with T1D, 26 weeks, Dexcom G5 CGM |
+| **Sparse data** | Labels come from the dense CGM series; model inputs use only simulated meter readings (before meals, at bedtime) with ISO 15197 measurement error |
+| **Compared methods** | B0 rule baseline → B1 logistic regression → M1 XGBoost / LightGBM → R1 the same model on dense CGM data (upper reference) |
+| **Explainability** | SHAP: the main factors behind each prediction |
+| **Data split** | By patient (no participant appears in both train and test) |
+| **Main metrics** | Recall, false alarms per patient-night, precision, AUPRC, Brier score, with 95% confidence intervals |
 
-The model is evaluated offline on the CITY dataset. Good results on a research dataset do not make the model clinically reliable.
+Full plan: [`docs/verification-plan.md`](docs/verification-plan.md).
 
 ### Glucose thresholds
 
-Based on international consensus on time in range:
+Based on ADA Standards of Care in Diabetes—2026:
 
 | Level | Range |
 |---|---|
@@ -107,18 +117,18 @@ Based on international consensus on time in range:
 | Level 1 hyperglycemia | > 10.0 mmol/L |
 | Level 2 hyperglycemia | > 13.9 mmol/L |
 
-Thresholds and alert scenarios are planned to be reviewed with an endocrinologist.
+The 3.9 and 3.0 mmol/L warning levels were confirmed by a general practitioner in our first interview. Thresholds and alert wording will be reviewed further with doctors.
 
 ---
 
 ## Medical safety and data protection
 
-- **AI assistant restrictions:** no insulin dosages, no diagnoses, no advice to stop or change treatment. Requests on these topics get a fixed safe response.
-- **Data quality:** physiologically impossible values are rejected; readings older than a set limit are marked as outdated.
-- **Offline alerts:** rule-based alerts and local notifications work without internet; critical alerts repeat until acknowledged.
-- **Access control:** role-based access; the patient grants and revokes access for parents and doctors; access is logged.
-- **Minors:** parental consent is stored as a consent record; a parent account is linked to the patient account.
-- **Data protection:** encrypted transport (HTTPS) and storage of sensitive data.
+- **AI coach restrictions:** no insulin dosages, no diagnoses, no advice to stop or change treatment. Requests on these topics are refused and redirected to the care team.
+- **Data quality:** values outside 1.1–33.3 mmol/L are not saved silently; probable unit mix-ups are checked; with too few or outdated readings, risk is shown as "Not enough data", never as low risk.
+- **Offline alerts:** critical alerts are generated on the device and shown immediately, even without internet.
+- **Access control:** role-based access; the patient grants and revokes parent and doctor access; every access change is logged.
+- **Minors:** parental consent is stored as a consent record.
+- **Data protection:** HTTPS only, hashed passwords, no secrets or real patient data in the repository.
 
 ---
 
@@ -128,10 +138,10 @@ Thresholds and alert scenarios are planned to be reviewed with an endocrinologis
 |---|---|---|
 | **Implementation** | Backend: API, database, access control, notifications | Mobile application (Flutter): patient and parent screens, glucose entry, alerts |
 | **Design** | Functional requirements, Use Case diagram, UX mockups of key scenarios | Non-functional requirements, System Context and Component diagrams, technology comparison |
-| **Research** | Literature review part 1, existing systems comparison (criteria, systems 1–2), user interviews set 1 | Literature review part 2 and synthesis, existing systems comparison (systems 3–5), user interviews set 2, verification and evaluation plan |
+| **Research** | Literature review part 1, existing systems comparison (criteria, systems 1–2), user interviews set 1 | Literature review part 2 and synthesis, existing systems comparison (systems 3–7), user interviews set 2, verification and evaluation plan |
 | **Project management** | Repository and README, project proposal and scope | YouTrack setup, milestones, risks and dependencies |
 
-Tasks are tracked in YouTrack (project `DIP`). Every task has one assignee, and commits reference the task ID, e.g. `DIP-1: Add initial repository structure and README`.
+Tasks are tracked in YouTrack (project `DIP`). Every task has one assignee, and commits reference the task ID, e.g. `DIP-11: Add existing systems comparison`.
 
 ---
 
@@ -139,14 +149,18 @@ Tasks are tracked in YouTrack (project `DIP`). Every task has one assignee, and 
 
 ```
 ├── config/      # Configuration files
-├── diagrams/    # System Context, Component, Use Case, ERD, Activity, Sequence
-├── docs/        # Proposal, project management plan, literature review
-├── src/         # Source code (mobile app, backend)
+├── diagrams/    # System Context, Component, Use Case and other diagrams
+├── docs/        # Project documents
+│   ├── existing-systems.md
+│   ├── project-management.md
+│   ├── project-proposal.md
+│   └── verification-plan.md
+├── src/         # Source code (mobile app, backend, ML)
 ├── tests/       # Tests
 └── README.md
 ```
 
-The CITY dataset is not included in this repository because of its data use terms.
+The CITY dataset is not stored in this repository. Only download instructions and processing scripts will be kept here.
 
 ---
 
@@ -154,7 +168,8 @@ The CITY dataset is not included in this repository because of its data use term
 
 | Date | Milestone |
 |---|---|
-| 22 Oct 2026 | Meeting with academic supervisor |
-| 24 Oct 2026 | First pre-defense (`pre-defense-1`) |
+| 12 Oct 2026 | Draft shown to the academic supervisor |
+| 22 Oct 2026 | Meeting with the academic supervisor |
+| 24 Oct 2026 | First pre-defense before the committee (`pre-defense-1`) |
 
 **Academic supervisor:** Altynbek Seitenov
