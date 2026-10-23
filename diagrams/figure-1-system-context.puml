@@ -1,0 +1,20 @@
+@startuml
+!include style.iuml
+left to right direction
+top to bottom direction
+rectangle "<b>Patient</b>\ntype 1 adolescent / young adult;\ntype 2: basic features" as P
+rectangle "<b>Parent / guardian</b>\nof a child with type 1" as PG
+rectangle "<b>Doctor</b>\nendocrinologist, GP" as D
+rectangle "<b>Administrator</b>\nplatform staff" as A
+rectangle "<b>Diabetes AI Assistant</b>\n\nmobile app (patient, parent) · doctor web panel\nFastAPI backend · PostgreSQL\nAI modules: threshold rules, bedtime risk model, AI coach\n\n<size:10>hosted on servers in Kazakhstan</size>" as S #E8F0FC
+rectangle "<b>Firebase Cloud Messaging</b>\n<<external service>>\npush delivery to phones" as F
+rectangle "<b>LLM provider API</b>\n<<external service>>\ntext generation for the coach" as L
+rectangle "<b>CITY dataset</b>\n<<offline, not used at runtime>>\ntrains and evaluates the risk model" as C
+P <--> S : logs readings, meals, insulin\n—\ncharts, alerts, bedtime risk,\ncoach answers
+PG <--> S : invite code; data for a\nyoung child\n—\nchild's readings, last sync,\ncritical alerts
+D <--> S : invite code\n—\nweekly report,\nurgent flag
+A <--> S : users and roles\n—\naudit log
+S --> F : alert push request\n(no glucose history)
+S <--> L : anonymised question + guideline\nexcerpts (no names, IDs, history)\n—\ndraft answer, filtered\nbefore display
+S <.. C : trained model file
+@enduml

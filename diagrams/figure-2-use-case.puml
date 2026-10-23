@@ -1,0 +1,70 @@
+@startuml
+!include style.iuml
+left to right direction
+skinparam packageStyle rectangle
+actor Patient as P
+actor "Parent /\nguardian" as PG
+actor Doctor as D
+actor Administrator as AD
+actor "Firebase Cloud\nMessaging\n<<external>>" as FCM
+actor "LLM provider\n<<external>>" as LLM
+
+rectangle "Diabetes AI Assistant" {
+  package "Logging and alerts" {
+    usecase "UC-08 Show emergency screen\n<size:10>FR-07</size>" as UC08
+    usecase "UC-07 Send critical alert\n<size:10>FR-05</size>" as UC07
+    usecase "UC-05 Log glucose reading\n<size:10>FR-02, FR-04, FR-19</size>" as UC05
+    usecase "UC-11 Recognise food photo\n<size:10>FR-22 (Could)</size>" as UC11
+    usecase "UC-10 Calculate meal bolus\n<size:10>FR-13</size>" as UC10
+    usecase "UC-06 Log meal, insulin, medication,\nactivity, symptoms\n<size:10>FR-03</size>" as UC06
+    usecase "UC-09 Set thresholds, quiet hours,\nreminders\n<size:10>FR-06, FR-18</size>" as UC09
+  }
+  package "Account and sharing" {
+    usecase "UC-01 Register and set up profile\n<size:10>FR-01, FR-20</size>" as UC01
+    usecase "UC-02 Share access by invite code,\nrevoke, choose what parent sees\n<size:10>FR-08, FR-09</size>" as UC02
+    usecase "UC-03 Join a patient by invite code\n<size:10>FR-08</size>" as UC03
+    usecase "UC-04 Export or delete own data\n<size:10>FR-21</size>" as UC04
+  }
+  package "Monitoring and AI" {
+    usecase "UC-14 Explain risk reason\n<size:10>FR-15</size>" as UC14
+    usecase "UC-13 Get bedtime hypo risk\n<size:10>FR-14</size>" as UC13
+    usecase "UC-12 View charts and trends\n<size:10>FR-16</size>" as UC12
+    usecase "UC-16 View child's data and last sync\n<size:10>FR-10</size>" as UC16
+    usecase "UC-17 View weekly report\n<size:10>FR-11, FR-12</size>" as UC17
+    usecase "UC-15 Ask AI coach\n<size:10>FR-17</size>" as UC15
+  }
+  package "Administration" {
+    usecase "UC-18 Manage users and roles\n<size:10>NFR-03</size>" as UC18
+    usecase "UC-19 Review audit log\n<size:10>NFR-05</size>" as UC19
+  }
+}
+
+P -- UC05
+P -- UC10
+P -- UC06
+P -- UC09
+P -- UC01
+P -- UC02
+P -- UC04
+P -- UC13
+P -- UC12
+P -- UC15
+
+UC07 -- FCM
+UC07 -- PG
+UC05 -- PG
+UC06 -- PG
+UC03 -- PG
+UC16 -- PG
+UC03 -- D
+UC17 -- D
+UC15 -- LLM
+UC18 -- AD
+UC19 -- AD
+
+UC08 .> UC05 : <<extend>>
+UC07 .> UC05 : <<extend>>
+UC11 .> UC10 : <<extend>>
+UC10 .> UC06 : <<extend>>
+UC13 .> UC14 : <<include>>
+@enduml
