@@ -1,0 +1,49 @@
+@startuml
+!include style.iuml
+skinparam dpi 170
+autonumber
+hide footbox
+actor Patient as P
+participant "Mobile app" as M
+participant "REST API\n(JWT, role)" as API
+participant "Health log" as HL
+participant "Alert engine" as AE
+participant "Consent and\nsharing" as CS
+participant "Notification\ndispatcher" as ND
+database PostgreSQL as DB
+participant FCM
+participant "Parent app" as PA
+participant "Doctor panel" as DP
+
+P -> M : enters 2.8 mmol/L, tag "bedtime"
+M -> M : local rule check: < 3.0 = urgent low
+M --> P : emergency screen: 15 g carbs,\nrecheck in 15 min, call for help (FR-07)
+note right of M
+works without internet;
+reading kept in the offline queue
+end note
+M -> API : POST /readings (JWT)
+API -> HL : validated reading
+HL -> HL : range 1.1–33.3, dedup by client_uuid
+HL -> DB : save reading (level = urgent_low)
+HL -> AE : new reading
+AE -> AE : urgent low (ignores quiet hours) (FR-05)
+AE -> DB : save alert
+AE -> CS : linked parents who receive alerts
+CS --> AE : active parent links
+AE -> ND : send alert to patient and parents
+ND -> FCM : push request
+FCM -> PA : push "urgent low" (target ≤ 60 s, NFR-08)
+alt push fails
+  ND -> ND : retry, delivery status = failed
+  ND --> M : "Parent not yet notified"
+end
+ND -> DB : save delivery status
+API --> M : 201 Created
+== later, not real time (FR-12) ==
+DP -> API : GET weekly report (JWT, doctor role)
+API -> CS : active consent?
+CS --> API : yes
+API -> DB : write audit record (NFR-05)
+API --> DP : report with urgent flag
+@enduml

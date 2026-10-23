@@ -1,0 +1,78 @@
+@startuml
+!include style.iuml
+skinparam linetype polyline
+skinparam nodesep 40
+skinparam ranksep 50
+
+package "Mobile app (Flutter) - patient, parent" as MOB {
+  rectangle "UI screens\n<size:10>log, charts, alerts, coach, sharing</size>" as UI
+  rectangle "Local rule check\n<size:10>thresholds on device, emergency screen</size>" as LRC
+  rectangle "Offline queue and sync\n<size:10>local store, retry</size>" as OQ
+}
+package "Doctor web panel (Flutter Web) - doctor, admin" as WEB {
+  rectangle "Patient list and\nweekly report view" as PL
+  rectangle "Admin console\n<size:10>users, roles, audit log</size>" as AC
+}
+rectangle "HTTPS reverse proxy\n<size:10>TLS 1.2+ (NFR-01)</size>" as PROXY
+
+package "Backend (FastAPI) - one deployable service" as BE {
+  rectangle "REST API layer\n<size:10>routers, Pydantic validation,</size>\n<size:10>JWT + role check on every request</size>" as API
+  package "Core services" {
+    rectangle "Auth and users\n<size:10>FR-01, NFR-02</size>" as AUTH
+    rectangle "Consent and sharing\n<size:10>invite codes, revoke, visibility</size>\n<size:10>FR-08, FR-09, NFR-04</size>" as CONS
+    rectangle "Audit log\n<size:10>NFR-05</size>" as AUD
+    rectangle "Health log\n<size:10>readings, meals, insulin, tags,</size>\n<size:10>range check, dedup (FR-02, 03, 19)</size>" as HL
+    rectangle "Alert engine\n<size:10>classify, thresholds, quiet hours</size>\n<size:10>FR-04 to FR-07</size>" as AE
+    rectangle "Notification dispatcher\n<size:10>FCM send, retry, delivery status</size>\n<size:10>NFR-08</size>" as ND
+    rectangle "Reports and trends\n<size:10>weekly report, share in range</size>\n<size:10>FR-11, FR-16</size>" as RT
+    rectangle "Bolus calculator\n<size:10>carbs / doctor-set ratio, max dose,</size>\n<size:10>blocked below 3.9 (FR-13)</size>" as BC
+    rectangle "Scheduler\n<size:10>reminders (FR-18), bedtime risk</size>" as SCH
+  }
+  package "AI modules" {
+    rectangle "Food recognition\n<size:10>optional, FR-22</size>" as FR
+    rectangle "AI coach\n<size:10>input guardrails, anonymiser, RAG,</size>\n<size:10>output filter + disclaimer (FR-17, NFR-07)</size>" as COACH #E8F0FC
+    rectangle "Risk model service\n<size:10>feature builder, data sufficiency,</size>\n<size:10>XGBoost, SHAP reason (FR-14, 15)</size>" as RISK #E8F0FC
+  }
+}
+database "PostgreSQL\n<size:10>users, consents, logs, alerts,</size>\n<size:10>predictions, audit log</size>" as DB
+database "Model and guideline files\n<size:10>versioned model file,</size>\n<size:10>ADA guideline index</size>" as FILES
+package "Offline (not deployed)" {
+  rectangle "Training pipeline\n<size:10>CITY → sparse sampling → train,</size>\n<size:10>evaluate B0 / B1 / M1 / R1</size>" as TP
+}
+cloud "LLM provider API" as LLM
+cloud "Firebase Cloud\nMessaging" as FCM
+
+
+note left of API
+Every request: JWT and role are checked here
+before any service runs; each read of another
+user's data is written to the audit log.
+end note
+
+UI --> LRC
+UI --> OQ
+OQ --> PROXY : REST/JSON + JWT
+PL --> PROXY
+AC --> PROXY
+PROXY --> API
+API --> AUTH
+API --> HL
+API --> FR
+HL -right-> AE
+AE -right-> ND
+SCH -up-> ND
+SCH -right-> RISK : at bedtime
+RT --> DB : SQLAlchemy\n(all core services)
+COACH --> FILES
+RISK --> FILES
+TP --> FILES : model file
+COACH --> LLM : anonymised
+ND --> FCM
+FCM .[norank].> UI : push
+AUTH -[hidden]down- HL
+CONS -[hidden]down- AE
+AUD -[hidden]down- ND
+HL -[hidden]down- RT
+AE -[hidden]down- BC
+ND -[hidden]down- SCH
+@enduml

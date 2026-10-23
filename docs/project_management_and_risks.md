@@ -4,9 +4,9 @@ This section shows how the work is organised and traced: the Git repository, the
 
 ## 1. Repository and task tracking
 
-**GitHub repository:** [LINK]
+**GitHub repository:** [Aruzhan233/diabetes-ai-assistant](https://github.com/Aruzhan233/diabetes-ai-assistant)
 
-**YouTrack project (key DIP):** [LINK]
+**YouTrack project (key DIP):** [diabetes-ai-diploma.youtrack.cloud](https://diabetes-ai-diploma.youtrack.cloud)  
 
 *Table 1 – Repository structure*
 
